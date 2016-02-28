@@ -36,6 +36,7 @@ struct MyRTSPHandler : public AHandler
 	MyRTSPHandler();
     virtual ~MyRTSPHandler();
 	int getHostIP (char addressBuffer[40]) ;
+	void setHostIP (char* addr) ;
 	void makeSDP(uint8_t* SPS,uint32_t SPS_len,uint8_t* PPS,uint32_t PPS_len);
 	bool mRunningFlag;
 	void setRTPConnection(ARTPConnection* RTPConn);
@@ -66,10 +67,11 @@ private:
     };
 	char mMD5part1[33];
 	char mMD5part3[33];
+	char hostIP[40];
 	AString mURI;
 	ARTPConnection* mRTPConnPt;
 	bool isAuthenticate(const char* NONCE,AString& tmpStr,const char* method);
-
+	void calcMD5part1();
 	void sendUnauthenticatedResponse(ARTSPConnection* Conn,int cseqNum);	
 	
 };

@@ -36,10 +36,10 @@
 #define DEBUG  //open log
 #ifdef DEBUG
 #ifdef ANDROID
-#define LOGF(tag, format, args...) __android_log_print(ANDROID_LOG_FATAL,tag,format,##args)
-#define LOGE(tag, format, args...) __android_log_print(ANDROID_LOG_ERROR,tag,format,##args)
-#define LOGW(tag, format, args...) __android_log_print(ANDROID_LOG_WARN,tag,format,##args)
-#define LOGI(tag, format, args...) __android_log_print(ANDROID_LOG_INFO,tag,format,##args)
+#define LOGF(tag, format, args...) __android_log_print(ANDROID_LOG_FATAL,tag,"[%s:%d]"format, __func__,__LINE__,##args)
+#define LOGE(tag, format, args...) __android_log_print(ANDROID_LOG_ERROR,tag,"[%s:%d]"format, __func__, __LINE__,##args)
+#define LOGW(tag, format, args...) __android_log_print(ANDROID_LOG_WARN,tag,"[%s:%d]"format,  __func__,__LINE__,##args)
+#define LOGI(tag, format, args...) __android_log_print(ANDROID_LOG_INFO,tag,"[%s:%d]"format,  __func__,__LINE__,##args)
 #else
 /*
 void PrintLog(const char *format, ...)

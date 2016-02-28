@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "ALooperRoster"
+#define LOG_TAG "IPCAM-ALooperRoster"
 #include "foundation/ALooperRoster.h"
 #include "foundation/ADebug.h"
 #include "foundation/AHandler.h"

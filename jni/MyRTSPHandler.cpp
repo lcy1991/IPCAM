@@ -2,6 +2,7 @@
 #include "our_md5.h"
 #include "rtsp/uuid.h"
 #include "rtsp/base64.h"
+#include "stage_utils.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -10,17 +11,18 @@
 #include <errno.h>
 
 
-#define RTSP_PORT 554
-#define LOG_TAG __FUNCTION__
+#define RTSP_PORT 5544
+#define LOG_TAG  "IPCAM-RTSP"
+
 const char* passwd = "123";
 const char* user = "123";
 const char* realm = "android";
 const char* uri="/ch0/live";
-
-//uint8_t spset[13] = {0x67 ,0x42, 0x00, 0x1f, 0x96, 0x54, 0x05, 0x01, 0xe8, 0x80 ,0x01, 0x00, 0x04};   //coolpad
-uint8_t spset[16] = {0x67, 0x42, 0x80, 0x1E, 0xDA, 0x02, 0x80, 0xF6, 0x80, 0x6D, 0x0A, 0x13, 0x50, 0x01, 0x00, 0x04};//vivo x710
-//uint8_t ppset[12] = {0x68 ,0xce ,0x38 ,0x80 ,0x00 ,0x00 ,0x00 ,0x10 ,0x70 ,0x61 ,0x73 ,0x70  };//coolpad
-uint8_t ppset[12] = {0x68, 0xCE, 0x06, 0xE2, 0x00, 0x00, 0x00, 0x10, 0x70, 0x61, 0x73, 0x70};//vivo x710
+//coolpad720*480
+uint8_t spset[13] = {0x67 ,0x42, 0x00, 0x0d, 0x96, 0x54, 0x05, 0xA1, 0xe8, 0x80 ,0x01, 0x00, 0x04};   //coolpad
+  //uint8_t spset[16] = {0x67, 0x42, 0x80, 0x1E, 0xDA, 0x02, 0x80, 0xF6, 0x80, 0x6D, 0x0A, 0x13, 0x50, 0x01, 0x00, 0x04};//vivo x710
+uint8_t ppset[12] = {0x68 ,0xce ,0x38 ,0x80 ,0x00 ,0x00 ,0x00 ,0x10 ,0x70 ,0x61 ,0x73 ,0x70  };//coolpad
+  //uint8_t ppset[12] = {0x68, 0xCE, 0x06, 0xE2, 0x00, 0x00, 0x00, 0x10, 0x70, 0x61, 0x73, 0x70};//vivo x710
 
 void bumpSocketBufferSize(int s) {
 		int size = 256 * 1024;
@@ -84,11 +86,22 @@ MyRTSPHandler::MyRTSPHandler()
 	  session_id(0),
 	  mtempSessionID(0)
 {
+
+}
+MyRTSPHandler::~MyRTSPHandler()
+{
+	close(mSocket);
+}
+
+void MyRTSPHandler::calcMD5part1()
+{
 	AString tmpStr;
 	char hostip[40];
 	getHostIP(hostip);
 	mURI.append("rtsp://");
 	mURI.append(hostip);
+	mURI.append(":");
+	mURI.append(RTSP_PORT);
 	mURI.append(uri);
 	LOGI(LOG_TAG,"uri--->%s",mURI.c_str());
 	tmpStr.append(user);
@@ -97,12 +110,9 @@ MyRTSPHandler::MyRTSPHandler()
 	tmpStr.append(":");
 	tmpStr.append(passwd);
 	//md5(username:realm:password)
-	MD5_encode(tmpStr.c_str(),mMD5part1);
+	MD5_encode(tmpStr.c_str(),mMD5part1);	
 }
-MyRTSPHandler::~MyRTSPHandler()
-{
-	close(mSocket);
-}
+
 void MyRTSPHandler::setRTPConnection(ARTPConnection* RTPConn)
 {
 	mRTPConnPt = RTPConn;
@@ -182,7 +192,7 @@ void MyRTSPHandler::onReceiveRequest(const sp<AMessage> &msg)
 			{
 				ReqMethodNum = DESCRIBE;
 				msg->findString("URI",&URI);
-				LOGI(LOG_TAG,"findString Method %s CSeq %d URI:%s###",method.c_str(),cseqNum,URI.c_str());
+				LOGI(LOG_TAG,"findString Method %s CSeq %d URI:%s",method.c_str(),cseqNum,URI.c_str());
 				if(passwd!=""&&user!="")
 					{
 						if(msg->findString("Authorization",&tmpStr)==false)//no Authorization
@@ -363,7 +373,7 @@ void MyRTSPHandler::onReceiveRequest(const sp<AMessage> &msg)
 		
 	
 }
-
+#if 0
 static void MakeSocketBlocking(int s, bool blocking) {
     // Make socket non-blocking.
     int flags = fcntl(s, F_GETFL, 0);
@@ -377,61 +387,11 @@ static void MakeSocketBlocking(int s, bool blocking) {
 
     CHECK_NE(fcntl(s, F_SETFL, flags), -1);
 }
-
+#endif
 void MyRTSPHandler::StartServer()
 {
 	pthread_create(&mtempTID,NULL,ServerThread,(void *)this);		
 	return;
-#if 0	
-	//mlooper.registerHandler(this);
-	mlooper.start();
-    mSocket = socket(AF_INET, SOCK_STREAM, 0);
-	mRunningFlag = true;
-    MakeSocketBlocking(mSocket, true);
-
-    struct sockaddr_in server_addr;
-    memset(server_addr.sin_zero, 0, sizeof(server_addr.sin_zero));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htons(INADDR_ANY); ;
-    server_addr.sin_port = htons(RTSP_PORT);
-	LOGI(LOG_TAG,"rtsp StartServer\n");
-	if(-1 == (bind(mSocket, (struct sockaddr*)&server_addr, sizeof(server_addr)))) 
-	  { 
-		LOGE(LOG_TAG,"Server Bind Failed:"); 
-		//exit(1); 
-		return ;
-	  } 
-	// socket监听
-	int err;
-	err = listen(mSocket, 15);//使主动连接套接字变成监听套接字
-	if(err < 0){
-
-		//mState = DISCONNECTED;
-	}
-	LOGI(LOG_TAG,"rtsp Start listening\n");
-	while(mRunningFlag)
-		{
-		   //mSocketAccept需要锁保护
-		    //pthread_mutex_lock(&mMutex);
-		    LOGI(LOG_TAG,"rtsp Start accept\n");
-		    struct sockaddr addr;
-            socklen_t addrlen ;
-			mSocketAccept = accept(mSocket,&addr,&addrlen);
-			mtempSessionID++;
-			
-			ARTSPConnection* rtspConn = new ARTSPConnection();
-			rtspConn->mClient_addr = addr;
-			mSessions.insert(make_pair(mtempSessionID, rtspConn));
-			mlooper.registerHandler(rtspConn);
-			rtspConn->StartListen(mSocketAccept,id(),mtempSessionID);
-
-
-			
-			//pthread_create(&mtempTID,NULL,NewSession,(void *)this);		
-			LOGE(LOG_TAG,"mtempSessionID[%d]\n",mtempSessionID);			
-		}
-#endif	
-
 }
 
 
@@ -442,12 +402,14 @@ void* MyRTSPHandler::ServerThread(void* arg)
 	MyRTSPHandler* handpt = (MyRTSPHandler*)arg;
 	handpt->mlooper.start();
     handpt->mSocket = socket(AF_INET, SOCK_STREAM, 0);
+	handpt->calcMD5part1();
+	if(handpt->mSocket < 0)
+		LOGE(__FUNCTION__,"socket() %s",strerror(errno));
 	handpt->mRunningFlag = true;
     MakeSocketBlocking(handpt->mSocket, true);
-
     struct sockaddr_in server_addr,peerAddr;
 	struct sockaddr_in addr;
-    socklen_t addrlen,peerLen ;
+    socklen_t addrlen;
     memset(server_addr.sin_zero, 0, sizeof(server_addr.sin_zero));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htons(INADDR_ANY); ;
@@ -455,7 +417,7 @@ void* MyRTSPHandler::ServerThread(void* arg)
 	LOGI(LOG_TAG,"rtsp StartServer\n");
 	if(-1 == (bind(handpt->mSocket, (struct sockaddr*)&server_addr, sizeof(server_addr)))) 
 	  { 
-		LOGE(LOG_TAG,"Server Bind Failed:"); 
+		LOGE(LOG_TAG,"Server Bind Failed:%s",strerror(errno)); 
 		//exit(1); 
 		return NULL;
 	  } 
@@ -463,8 +425,8 @@ void* MyRTSPHandler::ServerThread(void* arg)
 	int err;
 	err = listen(handpt->mSocket, 15);//使主动连接套接字变成监听套接字
 	if(err < 0){
-
-		//mState = DISCONNECTED;
+		LOGE(LOG_TAG,"Server listen Failed:%s",strerror(errno)); 
+		return NULL;
 	}
 	LOGI(LOG_TAG,"rtsp Start listening\n");
 	while(handpt->mRunningFlag)
@@ -556,10 +518,18 @@ void MyRTSPHandler::getDigest(const char* NONCE,const char* public_method,AStrin
 #if 1
 int MyRTSPHandler::getHostIP (char addressBuffer[40]) 
 {
-	sprintf(addressBuffer,"%s","192.168.1.105");
-	//sprintf(addressBuffer,"%s","127.0.0.1");
+	if(strlen(hostIP)==0)
+		sprintf(addressBuffer,"%s","192.168.1.105");
+	else 
+	    sprintf(addressBuffer,"%s",hostIP);
 	return 0;
 }
+
+void MyRTSPHandler::setHostIP (char* addr) 
+{
+	sprintf(hostIP,"%s",addr);
+}
+
 
 #else
 #include <ifaddrs.h>

@@ -3,6 +3,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:=               \
+	stage_utils.cpp      \
 	AHandler.cpp         \
 	ALooper.cpp          \
 	ALooperRoster.cpp    \

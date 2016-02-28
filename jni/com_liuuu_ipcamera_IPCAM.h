@@ -12,7 +12,7 @@ extern "C" {
  * Method:    stringFromJNI
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_liuuu_ipcamera_IPCAM_stringFromJNI
+JNIEXPORT jint JNICALL Java_com_liuuu_ipcamera_IPCAM_startRTSPServer
   (JNIEnv *, jobject);
 
 /*

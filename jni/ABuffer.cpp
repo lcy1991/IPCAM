@@ -18,7 +18,7 @@
 #include "foundation/ADebug.h"
 #include "foundation/ALooper.h"
 #include "foundation/AMessage.h"
-#define LOG_TAG ABuffer
+#define LOG_TAG "IPCAM-ABuffer"
 
 ABuffer::ABuffer(size_t capacity)
     : mData(malloc(capacity)),

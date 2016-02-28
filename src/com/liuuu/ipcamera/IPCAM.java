@@ -1,6 +1,10 @@
 package com.liuuu.ipcamera;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.util.List;
 
 import android.app.Activity;
@@ -9,6 +13,10 @@ import android.hardware.Camera;
 import android.hardware.Camera.AutoFocusCallback;
 import android.hardware.Camera.Size;
 import android.media.MediaRecorder;
+import android.net.LocalServerSocket;
+import android.net.LocalSocket;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
@@ -26,12 +34,16 @@ import android.widget.Toast;
 
 
 public class IPCAM extends Activity implements OnClickListener {
-	public native String  stringFromJNI();
+	public native int  startRTSPServer();
 	public native String helloWorld(String inputstr);
 	static {
         System.loadLibrary("stage");
     }
+	LocalServerSocket server;
+	LocalSocket receiver, sender;
+	String IPaddress;
 	Button record, stop;
+	Thread thread_loop;
 	// 系统视频文件
 	File viodFile;
 	MediaRecorder mRecorder;
@@ -44,35 +56,47 @@ public class IPCAM extends Activity implements OnClickListener {
 	@SuppressWarnings("deprecation")
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
-	super.onCreate(savedInstanceState); 
-	setContentView(R.layout.main);
-	record = (Button) findViewById(R.id.record);
-	stop = (Button) findViewById(R.id.stop);
-	sView = (SurfaceView) findViewById(R.id.dView);
-	// stop按钮不可用
-	stop.setEnabled(false);
-	
-	
-	// 设置Surface不需要维护自己的缓冲区
-	sView.getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-	// 设置分辨率
-	//sView.getHolder().setFixedSize(480, 800);
-    RelativeLayout.LayoutParams params  =   
-    new RelativeLayout.LayoutParams(540, 540*720/480);  
-          
-    params.leftMargin = 0;  
-    params.topMargin  = 0;  
-            
-    sView.setLayoutParams(params);
-	// 设置该组件不会让屏幕自动关闭
-	sView.getHolder().setKeepScreenOn(true);
- 
-	record.setOnClickListener(this);
-	stop.setOnClickListener(this);
-	Log.v("lcy", helloWorld("from jni"));
-	stringFromJNI();
-	//Log.d(TAG,stringFromJNI());//-----------------------------------------------------------------------------------jni//
-	 }
+		super.onCreate(savedInstanceState); 
+		setContentView(R.layout.main);
+		record = (Button) findViewById(R.id.record);
+		stop = (Button) findViewById(R.id.stop);
+		sView = (SurfaceView) findViewById(R.id.dView);
+		// stop按钮不可用
+		stop.setEnabled(false);
+		
+		
+		// 设置Surface不需要维护自己的缓冲区
+		sView.getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+		// 设置分辨率
+		//sView.getHolder().setFixedSize(480, 800);
+	    RelativeLayout.LayoutParams params  =   
+	    new RelativeLayout.LayoutParams(540, 540*720/480);  
+	          
+	    params.leftMargin = 0;  
+	    params.topMargin  = 0;  
+	            
+	    sView.setLayoutParams(params);
+		// 设置该组件不会让屏幕自动关闭
+		sView.getHolder().setKeepScreenOn(true);
+	 
+		record.setOnClickListener(this);
+		stop.setOnClickListener(this);
+		startRTSPServer();//---------------------------------client--------------------------------------------------jni//
+		IPaddress = getIPAddr();
+		try {
+			server = new LocalServerSocket("VideoCamera");	
+			sender = server.accept();
+			sender.setReceiveBufferSize(500000);
+			sender.setSendBufferSize(500000);
+			sender.getOutputStream().write(IPaddress.getBytes());
+		} catch (IOException e) {
+			Log.e(TAG, "outWriter error !!!!!!!!!!!!!!!!!");
+			finish();
+			return;
+		}
+		thread_daemon();
+
+	}
 	
 	@Override
 	 public boolean onCreateOptionsMenu(Menu menu) {
@@ -111,18 +135,19 @@ public class IPCAM extends Activity implements OnClickListener {
 				    if (!viodFile.exists())
 				     viodFile.createNewFile();
 				    // 设置从麦克风采集声音
-				    mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+				    //mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
 				    // 设置从摄像头采集图像
 				    mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
 				    // 设置视频、音频的输出格式
-				    mRecorder.setOutputFormat(MediaRecorder.OutputFormat.DEFAULT);
+				    mRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
 				    // 设置音频的编码格式、
-				    mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
+				    //mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
 				    // 设置图像编码格式
-				    mRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.DEFAULT);
+				    mRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+				    mRecorder.setVideoEncodingBitRate(500000);//500kbps
 				    mRecorder.setOrientationHint(90);
 				    mRecorder.setVideoSize(720, 480);
-				    // mRecorder.setVideoFrameRate(5);
+				    mRecorder.setVideoFrameRate(15);
 				    mRecorder.setOutputFile(viodFile.getAbsolutePath());
 				    // 指定SurfaceView来预览视频
 				    mRecorder.setPreviewDisplay(sView.getHolder().getSurface());
@@ -147,6 +172,8 @@ public class IPCAM extends Activity implements OnClickListener {
 		    // 释放资源
 		    mRecorder.release();
 		    mRecorder = null;
+		    camera.stopPreview();
+		    camera.release();
 		    // 让record按钮可用
 		    record.setEnabled(true);
 		    // 让stop按钮不可用
@@ -207,5 +234,137 @@ public class IPCAM extends Activity implements OnClickListener {
 
 	             });
 	    }	
+	private String getIPAddr(){
+		String IP;
+	    //获取wifi服务  
+	    WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);  
+	    //判断wifi是否开启  
+	    if (!wifiManager.isWifiEnabled()) {  
+	    wifiManager.setWifiEnabled(true);    
+	    }  
+	    WifiInfo wifiInfo = wifiManager.getConnectionInfo();       
+	    int ipAddress = wifiInfo.getIpAddress();   
+	    IP = intToIp(ipAddress);
+	    Log.d(TAG,"wifi IP address:"+IP);
+	    return IP;
+	}
+	private String intToIp(int i) {       
+	    
+	    return (i & 0xFF ) + "." +       
+	  ((i >> 8 ) & 0xFF) + "." +       
+	  ((i >> 16 ) & 0xFF) + "." +       
+	  ( i >> 24 & 0xFF) ;  
+	} 
 
+	private void thread_daemon() {
+		Log.d(TAG, "thread_daemon start");
+		(thread_loop = new Thread() {
+			public void run() {
+			byte[] bytes = new byte[10];
+			int ret=0;
+			InputStream fin = null;
+			try {
+				fin = sender.getInputStream();
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}			
+			//initializeVideo();
+			while(true)
+			{	
+				try {
+					Thread.currentThread().sleep(500);
+				} catch (InterruptedException e1) {
+					e1.printStackTrace();
+				}
+
+				try {
+					ret = fin.read(bytes, 0, 10);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				if(ret > 0)
+				{
+					if(bytes[0] == 0x05)
+					{
+						Log.i(TAG,"Receive stop signal");
+						stopRecording();
+					}
+					else if(bytes[0] == 0x06)
+					{
+						Log.i(TAG,"Receive start signal");
+						startRecording(sender);		
+					}
+				}
+			}
+
+			}
+		}).start();
+	}
+	
+	public void startRecording(LocalSocket viodFile){
+		try {
+		    // 创建MediaPlayer对象
+		    mRecorder = new MediaRecorder();
+		    mRecorder.reset();
+		    camera = Camera.open();
+		    getSupportSize(camera);
+		    Camera.Parameters params = camera.getParameters();
+		    //previewSize = params.getSupportedPreviewSizes();
+		    params.setPreviewSize(720, 480);
+		    //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+		    camera.setParameters(params);
+		    camera.setDisplayOrientation(90);
+		    camera.unlock();
+		    mRecorder.setCamera(camera);
+
+		    // 设置从麦克风采集声音
+		    //mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+		    // 设置从摄像头采集图像
+		    mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+		    // 设置视频、音频的输出格式
+		    mRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+		    // 设置音频的编码格式、
+		    //mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
+		    // 设置图像编码格式
+		    mRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+		    mRecorder.setVideoEncodingBitRate(500000);//500kbps
+		    mRecorder.setVideoFrameRate(15);
+		    mRecorder.setVideoSize(720, 480);
+		    mRecorder.setOrientationHint(90);
+
+		    mRecorder.setOutputFile(viodFile.getFileDescriptor());
+		    // 指定SurfaceView来预览视频
+		    mRecorder.setPreviewDisplay(sView.getHolder().getSurface());
+		    mRecorder.prepare();
+		    // 开始录制
+		    mRecorder.start();
+		    // 让record按钮不可用
+		    record.setEnabled(false);
+		    // 让stop按钮可用
+		    stop.setEnabled(true);
+		    isRecording = true;
+	
+		   } catch (Exception e) {
+		    e.printStackTrace();
+	    }		
+	}
+
+	public void stopRecording(){
+	   if (isRecording) {
+		    // 停止录制
+		    mRecorder.stop();
+		    // 释放资源
+		    mRecorder.release();
+		    mRecorder = null;
+		    camera.stopPreview();
+		    camera.release();
+		    // 让record按钮可用
+		    record.setEnabled(true);
+		    // 让stop按钮不可用
+		    stop.setEnabled(false);
+		   }	
+	}
+	
 }

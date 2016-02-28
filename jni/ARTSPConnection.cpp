@@ -15,15 +15,14 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "ARTSPConnection"
-#define PORT 554
+#define LOG_TAG "IPCAM-ARTSPConnection"
 #include "rtsp/ARTSPConnection.h"
 #include "rtsp/base64.h"
 
 #include "foundation/ABuffer.h"
 #include "foundation/ADebug.h"
 #include "foundation/AMessage.h"
-
+#include "stage_utils.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -102,7 +101,7 @@ void ARTSPConnection::onMessageReceived(const sp<AMessage> &msg) {
     }
 }
 
-
+#if 0
 static void MakeSocketBlocking(int s, bool blocking) {
     // Make socket non-blocking.
     int flags = fcntl(s, F_GETFL, 0);
@@ -116,7 +115,7 @@ static void MakeSocketBlocking(int s, bool blocking) {
 
     CHECK_NE(fcntl(s, F_SETFL, flags), -1);
 }
-
+#endif
 void ARTSPConnection::StartListen(int socket,handler_id handlerID,uint32_t mtempSessionID)
 {
 	mSocket = socket;
@@ -378,11 +377,13 @@ bool ARTSPConnection::receiveRTSPRequest() {
     if (space2 < 0) {
         return false;
     }
+	LOGI(LOG_TAG,"SPACE1 %d SPACE2 %d",space1,space2);
 
     AString Method(requestLine.c_str(), space1);
 	request->setString("Method",Method.c_str());
 	AString URI(requestLine,space1+1,space2-space1-1);
 	request->setString("URI",URI.c_str());
+	LOGI(LOG_TAG,"SPACE1 %s SPACE2 %s",Method.c_str(),URI.c_str());
     AString line;
     for (;;) {
         if (!receiveLine(&line)) {

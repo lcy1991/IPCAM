@@ -1,5 +1,5 @@
 #include "rtsp/ARTPSource.h"
-#define LOG_TAG "ARTPSource"
+#define LOG_TAG "IPCAM-ARTPSource"
 
 #define IF 0
 MyQueue::MyQueue(uint32_t MaxBufNum,uint32_t bufSize)

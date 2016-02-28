@@ -14,6 +14,7 @@ OBJ=                   \
 	AAtomizer.o        \
 	ARTSPConnection.o  \
 	MyRTSPHandler.o    \
+	stage_utils.o      \
 	ARTPSource.o       \
 	ARTPConnection.o
 

@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "ARTPConnection"
+#define LOG_TAG "IPCAM-RTP"
 
 
 #include "rtsp/ARTPConnection.h"
@@ -436,7 +436,7 @@ void* ARTPConnection::threadloop(void* arg)
 					connptr->mRTPSource->outputQPush(buf);
 					usleep(10000);
 				}
-			else LOGI(LOG_TAG,"RTP Source is empty");	
+			//else LOGI(LOG_TAG,"RTP Source is empty");
 		}
 }
 
