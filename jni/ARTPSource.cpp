@@ -1,7 +1,7 @@
 #include "rtsp/ARTPSource.h"
 #define LOG_TAG "IPCAM-ARTPSource"
 
-#define IF 0
+#define IF 1
 MyQueue::MyQueue(uint32_t MaxBufNum,uint32_t bufSize)
 {
 	mEmptyBufSize = 0;
@@ -19,7 +19,7 @@ MyQueue::~MyQueue()
 	while(mBufQue.size())
 		{
 			mBufQue.pop();
-			//LOGI(LOG_TAG,"~MyQueue");
+			//LOGI("~MyQueue");
 		}
 		
 }
@@ -29,20 +29,20 @@ int MyQueue::push(const sp<ABuffer> &buf)
 {
 	if(mBufQue.size() == mMaxBufSize)
 		{
-			LOG_IF(IF,LOG_TAG,"MyQueue is full!");
+			LOG_IF(IF,"MyQueue is full!");
 			return -1;
 		}
 	if(buf->size()==0)
 			mEmptyBufSize++;
 	mBufQue.push(buf);
-	LOG_IF(IF,LOG_TAG,"mEmptyBufSize %d",mEmptyBufSize);
+	LOG_IF(IF,"mEmptyBufSize %d",mEmptyBufSize);
 	return 0;
 }
 int	MyQueue::pop(sp<ABuffer> &buf)
 {
 	if(mBufQue.size()==0)
 		{
-			LOG_IF(IF,LOG_TAG,"MyQueue is empty!");
+			LOG_IF(IF,"MyQueue is empty!");
 			return -1;
 		}
 
@@ -65,16 +65,17 @@ int MyQueue::getEmptyBufSize()
 
 int ARTPSource::inputQPop(sp<ABuffer> &buf)
 {
+	LOG_IF(IF,"try to get mInputQLock");
 	mInputQLock.lock();
-	LOG_IF(IF,LOG_TAG,"mInputQ is Lock");
+	LOG_IF(IF,"mInputQ is Lock");
 	if(pInInputQ->getEmptyBufSize()==0)//input queue is full, we need empty queue
 		{
 			mInputQLock.unlock();
 			return -1;
 #if 0			
-			LOGI(LOG_TAG,"inputQPop input queue is full,waiting for exchange");
+			LOGI("inputQPop input queue is full,waiting for exchange");
 			mInputQLock.unlock();
-			LOGI(LOG_TAG,"mInputQ is unLock");
+			LOGI("mInputQ is unLock");
 			mOutputQLock.lock();//get the output queue
 			if(pOutOutputQ->getEmptyBufSize()!=0)//if output queue is not empty, don't change
 				{
@@ -86,17 +87,17 @@ int ARTPSource::inputQPop(sp<ABuffer> &buf)
 
 			pInInputQ->pop(buf);
 			mOutputQLock.unlock();
-			LOGI(LOG_TAG,"mOutputQ is unLock--------------------------");
+			LOGI("mOutputQ is unLock--------------------------");
 #endif			
 		}
 	else 
 		{
-			LOG_IF(IF,LOG_TAG,"pop from input queue4 %p",pInInputQ);
-			if(pInInputQ==NULL)LOG_IF(IF,LOG_TAG,"pInInputQ is null");
+			LOG_IF(IF,"pop from input queue %p",pInInputQ);
+			if(pInInputQ==NULL)LOG_IF(IF,"pInInputQ is null");
 			
 			if(pInInputQ->pop(buf)!=0)
 				{
-					LOG_IF(IF,LOG_TAG,"pop error");
+					LOG_IF(IF,"pop error");
 					return -1;
 				}
 				
@@ -105,48 +106,50 @@ int ARTPSource::inputQPop(sp<ABuffer> &buf)
 }
 int ARTPSource::inputQPush(const sp<ABuffer> &buf)
 {
-	LOG_IF(IF,LOG_TAG,"push to input queue %d",pInInputQ);
+	LOG_IF(IF,"push to input queue %p",pInInputQ);
 	pInInputQ->push(buf);
 	mInputQLock.unlock();
-	LOG_IF(IF,LOG_TAG,"mInputQ is unLock");
+	LOG_IF(IF,"mInputQ is unLock");
 	return 0;
 }
 int ARTPSource::outputQPop(sp<ABuffer> &buf)
 {
 
-	mOutputQLock.lock();
+	//mOutputQLock.lock();//第一次进入需要锁住剩下的在交换时解锁和上锁
 
 	if(pOutOutputQ->getEmptyBufSize() == pOutOutputQ->getQSize())//queue is empty
 		{
 			
-			LOG_IF(IF,LOG_TAG,"output queue is empty ,waiting for exchange");
-			mOutputQLock.unlock();
-			LOG_IF(IF,LOG_TAG,"mOutputQ is unlock");
+			LOG_IF(IF,"output queue is empty ,waiting for exchange");
+			//mOutputQLock.unlock();
+			//LOG_IF(IF,"mOutputQ is unlock");
 			mInputQLock.lock();
-			LOG_IF(IF,LOG_TAG,"mInputQ is lock");
-			if(pInInputQ->getEmptyBufSize()!=0)//intput queue is not empty, we change in and out
+			LOG_IF(IF,"mInputQ is lock");
+			if(pInInputQ->getEmptyBufSize()== pInInputQ->getQSize())//intput queue is not empty, we change in and out
 				{
 					mInputQLock.unlock();
-					LOG_IF(IF,LOG_TAG,"mInputQ is unlock");
-					mOutputQLock.unlock();
-					LOG_IF(IF,LOG_TAG,"mOutputQ is unlock");
-					LOG_IF(IF,LOG_TAG,"input Q is also empty");
+					LOG_IF(IF,"mInputQ is unlock");
+					//mOutputQLock.unlock();
+					LOG_IF(IF,"mOutputQ is unlock");
+					LOG_IF(IF,"input Q is also empty");
 					return -1;
 				}
 			pOutOutputQ = (pOutOutputQ == mOutputQueue)?mInputQueue:mOutputQueue;
 			pInInputQ = (pInInputQ == mInputQueue)?mOutputQueue:mInputQueue;
 			pOutOutputQ->pop(buf);
+			LOG_IF(IF,"pop from output queue %p",pOutOutputQ);
+			LOG_IF(IF,"mInputQ is unlock +++++++++++++++++++++++++++");
 			if(buf->size()==0)//buf is empty
 				{
 					pOutOutputQ->push(buf);
+					mInputQLock.unlock();
 					return -1;
 				}			
 			mInputQLock.unlock();
-			LOG_IF(IF,LOG_TAG,"mInputQ is unlock +++++++++++++++++++++++++++");
 		}
 	else
 		{
-			LOG_IF(IF,LOG_TAG,"pop from output queue %d",pOutOutputQ);
+			LOG_IF(IF,"pop from output queue %p",pOutOutputQ);
 			pOutOutputQ->pop(buf);
 			if(buf->size()==0)//ABuffer is empty
 				{
@@ -158,12 +161,12 @@ int ARTPSource::outputQPop(sp<ABuffer> &buf)
 }
 int ARTPSource::outputQPush(const sp<ABuffer> &buf)
 {
-	LOG_IF(IF,LOG_TAG,"push to output queue");
+	LOG_IF(IF,"push to output queue");
 	pOutOutputQ->push(buf);
 	//if(pOutOutputQ->getEmptyBufSize() == pOutOutputQ->getQSize())
 	//	{
-	mOutputQLock.unlock();
-			LOG_IF(IF,LOG_TAG,"mOutputQ is unlock");
+	//mOutputQLock.unlock();
+	//		LOG_IF(IF,"mOutputQ is unlock");
 	//	}
 	return 0;
 }

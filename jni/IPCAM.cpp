@@ -70,6 +70,12 @@ inline int recvN(int localSocket,char* buf,uint32_t N)
 
 #define IP_LENGTH  40
 void* start(void*){
+
+//*********************************
+	FILE* bits;
+	bits = fopen("test.264","r");
+
+//*********************************
 	int localsocket, len;
 	int recv_size=0;
 	int err;
@@ -120,13 +126,16 @@ void* start(void*){
 	}
 	LOGI(LOG_TAG,"connected") ;
 	MakeSocketBlocking(localsocket,true);
-	//getBoxLen(localsocket);
-	//return NULL;
+
 
 	if(recv(localsocket,localIP,IP_LENGTH,0) < 0)
 		LOGE(LOG_TAG,"Receive IP addr error");
 	else
 		LOGI(LOG_TAG,"Receive IP addr:%s",localIP);
+
+	//getBoxLen(localsocket);
+	//return NULL;
+
 	handler_rtsp.setHostIP(localIP);
 	handler_rtp.setSource(&mysource);
 	handler_rtsp.setRTPConnection(&handler_rtp);
@@ -143,10 +152,10 @@ void* start(void*){
 
 
 	sp<ABuffer> tmpbuf;
-	int Len,ret;
-	int i=0;
-	char LenBuf[4];
-	char Buf[100];
+	uint32_t Len;
+	int i=0,ret;
+	uint8_t LenBuf[4];
+	uint8_t Buf[100];
 	char Signal;
 	bool pre_status;
 	bool cur_status;
@@ -238,13 +247,15 @@ int getBoxLen(int localSocket)
 	if(ret < 0)return -1;
 	LOGI(LOG_TAG,"receive %d 1st bytes",ret);
 	//fwrite(Buf,1,ret,fp);
-	for(i=0;i<1000;i++)   
+	memset(Buf,52,0);
+	for(i=0;i<1000;i++)
 	{
 		ret = recv(localSocket,Buf,4,MSG_WAITALL);
 		if(ret < 0)return -1;
-		fwrite(header,1,4,fp);
+		fwrite(Buf,1,ret,fp);
+//		fwrite(header,1,4,fp);
 		length = Buf[0]<<24 | Buf[1]<<16 | Buf[2]<<8 | Buf[3];
-        __android_log_print(ANDROID_LOG_DEBUG,"LCY DEBUG TAG","recv frame 0x%x 0x%x 0x%x 0x%x bytes %d",Buf[0],Buf[1],Buf[2],Buf[3],length) ;
+        LOGI(LOG_TAG,"recv frame 0x%x 0x%x 0x%x 0x%x bytes %d",Buf[0],Buf[1],Buf[2],Buf[3],length) ;
 		ret = recvN(localSocket,Buf,length);
 		if(ret<0)return -1;
 		fwrite(Buf,1,ret,fp);

@@ -41,24 +41,6 @@
 #define LOGW(tag, format, args...) __android_log_print(ANDROID_LOG_WARN,tag,"[%s:%d]"format,  __func__,__LINE__,##args)
 #define LOGI(tag, format, args...) __android_log_print(ANDROID_LOG_INFO,tag,"[%s:%d]"format,  __func__,__LINE__,##args)
 #else
-/*
-void PrintLog(const char *format, ...)
-{
-	FILE *logfp = NULL;
-
-	if(logfp == NULL)
-	{
-		logfp = fopen("log.txt", "w");
-	}
-	va_list ap;
-	va_start(ap, format);
-	if(logfp) vfprintf(logfp,format,ap);
-	va_start(ap, format);
-	vprintf(format,ap);
-
-	va_end(ap);
-	fflush(logfp);
-}	*/
 #define LOGF(tag, format, args...) printf("[%s@%s,%d]"format"\n",__func__, __FILE__, __LINE__,##args)
 #define LOGE(tag, format, args...) printf("[%s@%s,%d]"format"\n",__func__, __FILE__, __LINE__,##args)
 #define LOGW(tag, format, args...) printf("[%s@%s,%d]"format"\n",__func__, __FILE__, __LINE__,##args)
@@ -71,7 +53,7 @@ void PrintLog(const char *format, ...)
 #define LOGW(tag, format, args...)
 #define LOGI(tag, format, args...)
 #endif
-#define LOG_IF(con,format, args...) do{if(con)LOGF(__FILE__, format, ##args);}while(0)
+#define LOG_IF(con,format, args...) do{if(con)LOGF(__FILE__,format,##args);}while(0)
 #define CHECK(condition)                                \
     LOG_IF(                                \
             !(condition),                               \

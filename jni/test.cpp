@@ -8,9 +8,9 @@
 #include "rtsp/ARTPConnection.h"
 
 
-ARTPSource mysource(5,50000); 
+ARTPSource mysource(5,50000);
 int GetAnnexbNALU (sp<ABuffer> nalu);
-
+void* start__(void*);
 
 void* sendbuf(void* agr)
 {
@@ -50,194 +50,117 @@ void* getbuf(void* arg)
 FILE* bits;
 int main()
 {
-	bits = fopen("vivotest.264","r");
+	bits = fopen("test.264","r");
+	pthread_t p_t;
+	int ret;
+	void* status;
+	ret=pthread_create(&p_t,NULL,start__,NULL);
+	pthread_join(p_t,&status);
+	return 0;
+}
 
-#if 1
+
+void* start__(void*){
+
+//*********************************
+	FILE* bits;
+	bits = fopen("test.264","r");
+	if(bits<0)
+		LOGE(LOG_TAG,"open file fail");
+
+//*********************************
+	int localsocket, len;
+	int err;
+	char localIP[] = "127.0.0.1";//"192.168.1.101";
 	ALooper looper1;
 	MyRTSPHandler handler_rtsp;
 	ARTPConnection handler_rtp;
+
+	handler_rtsp.setHostIP(localIP);
 	handler_rtp.setSource(&mysource);
 	handler_rtsp.setRTPConnection(&handler_rtp);
 	looper1.registerHandler(&handler_rtsp);
 	looper1.registerHandler(&handler_rtp);
 	looper1.start();
 	handler_rtsp.StartServer();
-#endif
-#if 0
-pthread_t idsend;
-pthread_t idget;
 
-int i,ret;b
-
-
-ret=pthread_create(&idsend,NULL,sendbuf,NULL);
-
-ret=pthread_create(&idget,NULL,getbuf,NULL);
-
-//sleep(1);
-void* status;
-pthread_join(idsend,&status);
-pthread_join(idget,&status);
-
-#endif
-
-#if 0
-ARTPConnection* RTPConn = new ARTPConnection();
-ALooper* looper1 =	new ALooper;
-looper1->registerHandler(RTPConn);
-looper1->start();
-struct sockaddr_in address;//处理网络通信的地址  
-int rtpsock;
-int rtcpsock;
-
-bzero(&address,sizeof(address));	
-address.sin_family=AF_INET;  
-address.sin_addr.s_addr=inet_addr("127.0.0.1");//这里不一样  
-address.sin_port=htons(6789); 
-RTPConn->setSource(&mysource);
-
-//MakePortPair(&rtpsock,&rtcpsock,address);
-printf("MakePortPair %d\n",MakePortPair(&rtpsock,&rtcpsock,address));
-address.sin_family=AF_INET;  
-address.sin_addr.s_addr=inet_addr("127.0.0.1");//这里不一样  
-address.sin_port=htons(6789); 
-
-RTPConn->addStream(rtpsock,rtcpsock,0,&address);
-#endif
-
-sp<ABuffer> tmpbuf;
-int Len;
-int i=0;
-while(!handler_rtp.getStatus())
-{
-	usleep(2000);
-}
-while(feof(bits)==0)
-{
-	if(mysource.inputQPop(tmpbuf)>=0)
-		{
-			Len = GetAnnexbNALU(tmpbuf);
-			tmpbuf->setRange(0,Len);
-			LOGI(LOG_TAG,"get a NALU length:%d NUM:%d\n",Len,i++);
-			mysource.inputQPush(tmpbuf);
-		}
-}
-
-sleep(10);
-
-LOGI(LOG_TAG,"END");
+	//coolpad720*480
+	uint8_t coolpad720x480spset[13] = {0x67 ,0x42, 0x00, 0x0d, 0x96, 0x54, 0x05, 0xA1, 0xe8, 0x80 ,0x01, 0x00, 0x04};   //coolpad
+	  //uint8_t spset[16] = {0x67, 0x42, 0x80, 0x1E, 0xDA, 0x02, 0x80, 0xF6, 0x80, 0x6D, 0x0A, 0x13, 0x50, 0x01, 0x00, 0x04};//vivo x710
+	uint8_t coolpad720x480ppset[12] = {0x68 ,0xce ,0x38 ,0x80 ,0x00 ,0x00 ,0x00 ,0x10 ,0x70 ,0x61 ,0x73 ,0x70  };//coolpad
+	  //uint8_t ppset[12] = {0x68, 0xCE, 0x06, 0xE2, 0x00, 0x00, 0x00, 0x10, 0x70, 0x61, 0x73, 0x70};//vivo x710
 
 
+	sp<ABuffer> tmpbuf;
+	int ret;
+	uint32_t Len;
+	int i=0;
+	uint8_t LenBuf[4];
+	uint8_t Buf[100];
+	char Signal;
+	bool pre_status;
+	bool cur_status;
+	cur_status = pre_status = handler_rtp.getStatus();
+	while(1)
+	{
+		pre_status = cur_status;
+		cur_status = handler_rtp.getStatus();
+		//LOGI(LOG_TAG,"cur_status:%d",cur_status);
+		if(cur_status)
+			{
+				if(pre_status==false)
+					{
+						if(mysource.inputQPop(tmpbuf)>=0)
+							{
+								LOGI(LOG_TAG,"SEND SPS");
+								memcpy((char*)tmpbuf->data(),coolpad720x480spset,sizeof(coolpad720x480spset));
+								tmpbuf->setRange(0,sizeof(coolpad720x480spset));
+								mysource.inputQPush(tmpbuf);
+							}
+						if(mysource.inputQPop(tmpbuf)>=0)
+							{
+								LOGI(LOG_TAG,"SEND PPS");
+								memcpy((char*)tmpbuf->data(),coolpad720x480ppset,sizeof(coolpad720x480ppset));
+								tmpbuf->setRange(0,sizeof(coolpad720x480ppset));
+								mysource.inputQPush(tmpbuf);
+							}
+					}
+				if(mysource.inputQPop(tmpbuf)>=0)
+					{
+						//ret = recv(localsocket,LenBuf,4,MSG_WAITALL);
+						ret = fread(LenBuf,sizeof(char),4,bits);
+						if(ret < 0)
+							{
+								LOGE(LOG_TAG,"%s",strerror(errno));
+								tmpbuf->setRange(0,0);
+							}
+						else
+							{
+								Len = LenBuf[0]<<24 | LenBuf[1]<<16 | LenBuf[2]<<8 | LenBuf[3];
+								LOGI(LOG_TAG,"recv frame 0x%x 0x%x 0x%x 0x%x bytes %d",LenBuf[0],LenBuf[1],LenBuf[2],LenBuf[3],Len) ;
+								LOGI(LOG_TAG,"get len %d",Len);									
+								ret = fread((char*)tmpbuf->data(),sizeof(char),Len,bits);
+								if(ret >= 0)
+									{
+										tmpbuf->setRange(0,ret);
+										LOGI(LOG_TAG,"get a NALU length:%d NUM:%d\n",ret,i++);
+									}
+								else tmpbuf->setRange(0,0);
+							}
+						mysource.inputQPush(tmpbuf);
+					}
+			}
+		else
+			{
+				if(pre_status==true)
+					{
+						if(!fseek(bits,0,SEEK_SET))
+							LOGI(LOG_TAG,"Reset the file pointer");
+					}
+				usleep(10000);
+			}
+	}
 
 	return 0;
-
 }
-
-static int FindStartCode2 (unsigned char *Buf)
-{
-	if(Buf[0]!=0 || Buf[1]!=0 || Buf[2] !=1) return 0; //判断是否为0x000001,如果是返回1
-	else return 1;
-}
-
-static int FindStartCode3 (unsigned char *Buf)
-{
-	if(Buf[0]!=0 || Buf[1]!=0 || Buf[2] !=0 || Buf[3] !=1) return 0;//判断是否为0x00000001,如果是返回1
-	else return 1;
-}
-
-
-//这个函数输入为一个NAL结构体，主要功能为得到一个完整的NALU并保存在NALU_t的buf中，
-//获取他的长度，填充F,IDC,TYPE位。
-//并且返回两个开始字符之间间隔的字节数，即包含有前缀的NALU的长度
-int GetAnnexbNALU (sp<ABuffer> nalu)
-{
-	int pos = 0;
-	int StartCodeFound, rewind;
-//	unsigned char *Buf;
-	int info2,info3,startcodeprefix_len,len;
-
-	static unsigned char Buf[50000];
-
-	startcodeprefix_len=3;//初始化码流序列的开始字符为3个字节
-
-	if (3 != fread (Buf, 1, 3, bits))//从码流中读3个字节
-	{
-		//free(Buf);
-		return 0;
-	}
-	info2 = FindStartCode2 (Buf);//判断是否为0x000001 
-	if(info2 != 1) 
-	{
-		//如果不是，再读一个字节
-		if(1 != fread(Buf+3, 1, 1, bits))//读一个字节
-		{
-			//free(Buf);
-			return 0;
-		}
-		info3 = FindStartCode3 (Buf);//判断是否为0x00000001
-		if (info3 != 1)//如果不是，返回-1
-		{ 
-			//free(Buf);
-			return -1;
-		}
-		else 
-		{
-			//如果是0x00000001,得到开始前缀为4个字节
-			pos = 4;
-			startcodeprefix_len = 4;
-		}
-	}
-	else
-	{
-		//如果是0x000001,得到开始前缀为3个字节
-		startcodeprefix_len = 3;
-		pos = 3;
-	}
-	//查找下一个开始字符的标志位
-	StartCodeFound = 0;
-	info2 = 0;
-	info3 = 0;
-
-	while (!StartCodeFound)
-	{
-		if (feof (bits))//判断是否到了文件尾
-		{
-			//return 0;
-			len = (pos-1)- startcodeprefix_len;
-			memcpy (nalu->data(), &Buf[startcodeprefix_len], len);     
-			//free(Buf);
-			printf("lcy 1991 len %d\n",len);
-			return pos-1;
-		}
-		Buf[pos++] = fgetc (bits);//读一个字节到BUF中
-		info3 = FindStartCode3(&Buf[pos-4]);//判断是否为0x00000001
-		if(info3 != 1)
-			info2 = FindStartCode2(&Buf[pos-3]);//判断是否为0x000001
-		StartCodeFound = (info2 == 1 || info3 == 1);
-	}
-
-	// Here, we have found another start code (and read length of startcode bytes more than we should
-	// have.  Hence, go back in the file
-	rewind = (info3 == 1)? -4 : -3;
-
-	if (0 != fseek (bits, rewind, SEEK_CUR))//把文件指针指向前一个NALU的末尾
-	{
-		//free(Buf);
-		printf("GetAnnexbNALU: Cannot fseek in the bit stream file");
-	}
-
-	// Here the Start code, the complete NALU, and the next start code is in the Buf.  
-	// The size of Buf is pos, pos+rewind are the number of bytes excluding the next
-	// start code, and (pos+rewind)-startcodeprefix_len is the size of the NALU excluding the start code
-
-	len = (pos+rewind)-startcodeprefix_len;
-	memcpy (nalu->data(), &Buf[startcodeprefix_len], len);//拷贝一个完整NALU，不拷贝起始前缀0x000001或0x00000001
-	//free(Buf);
-	printf("memcpy2\n");
-
-	return (pos+rewind);//返回两个开始字符之间间隔的字节数，即包含有前缀的NALU的长度
-}
-
-
-
 
