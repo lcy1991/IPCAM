@@ -97,6 +97,10 @@ MAKE_COMPARATOR(GT,>)
 #define CHECK_GE(x,y)   CHECK_OP(x,y,GE,>=)
 #define CHECK_GT(x,y)   CHECK_OP(x,y,GT,>)
 
+
+
+
+
 #define TRESPASS()      LOGF(__FILE__,"Should not be here.")
 
 

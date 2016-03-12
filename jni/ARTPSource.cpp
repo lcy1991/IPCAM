@@ -1,7 +1,7 @@
 #include "rtsp/ARTPSource.h"
 #define LOG_TAG "IPCAM-ARTPSource"
 
-#define IF 1
+#define IF 0
 MyQueue::MyQueue(uint32_t MaxBufNum,uint32_t bufSize)
 {
 	mEmptyBufSize = 0;
@@ -114,12 +114,12 @@ int ARTPSource::inputQPush(const sp<ABuffer> &buf)
 }
 int ARTPSource::outputQPop(sp<ABuffer> &buf)
 {
-
+	MyQueue* tmpPtr;
 	//mOutputQLock.lock();//第一次进入需要锁住剩下的在交换时解锁和上锁
 
 	if(pOutOutputQ->getEmptyBufSize() == pOutOutputQ->getQSize())//queue is empty
 		{
-			
+
 			LOG_IF(IF,"output queue is empty ,waiting for exchange");
 			//mOutputQLock.unlock();
 			//LOG_IF(IF,"mOutputQ is unlock");
@@ -128,17 +128,21 @@ int ARTPSource::outputQPop(sp<ABuffer> &buf)
 			if(pInInputQ->getEmptyBufSize()== pInInputQ->getQSize())//intput queue is not empty, we change in and out
 				{
 					mInputQLock.unlock();
-					LOG_IF(IF,"mInputQ is unlock");
+					//LOG_IF(IF,"mInputQ is unlock");
 					//mOutputQLock.unlock();
-					LOG_IF(IF,"mOutputQ is unlock");
-					LOG_IF(IF,"input Q is also empty");
+					//LOG_IF(IF,"mOutputQ is unlock");
+					//LOG_IF(IF,"input Q is also empty");
 					return -1;
 				}
-			pOutOutputQ = (pOutOutputQ == mOutputQueue)?mInputQueue:mOutputQueue;
-			pInInputQ = (pInInputQ == mInputQueue)?mOutputQueue:mInputQueue;
+			tmpPtr = pOutOutputQ;
+			pOutOutputQ = pInInputQ;
+			pInInputQ = tmpPtr;
+			//pOutOutputQ = (pOutOutputQ == mOutputQueue)?mInputQueue:mOutputQueue;
+			//pInInputQ = (pInInputQ == mInputQueue)?mOutputQueue:mInputQueue;
+			LOG_IF(IF,"Exchange +++++++++++++++++++++++++++IN[%p] OUT[%p]",pInInputQ,pOutOutputQ);
 			pOutOutputQ->pop(buf);
 			LOG_IF(IF,"pop from output queue %p",pOutOutputQ);
-			LOG_IF(IF,"mInputQ is unlock +++++++++++++++++++++++++++");
+
 			if(buf->size()==0)//buf is empty
 				{
 					pOutOutputQ->push(buf);
@@ -175,7 +179,7 @@ int ARTPSource::outputQPush(const sp<ABuffer> &buf)
 ARTPSource::ARTPSource(uint32_t bufNum, uint32_t bufSize)
 	: mBufSize(bufSize),
 	  mBufNum(bufNum),
-	  mFramerate(15)
+	  mFramerate(9)
 {
 
 	mInputQueue = new MyQueue(bufNum,bufSize);

@@ -54,7 +54,7 @@ const uint8_t ff_ue_golomb_vlc_code[512]=
   };
 
 
-static const size_t UDP_MAX_SIZE = 1500;
+static const size_t UDP_MAX_SIZE = 1458;//1500;
 
 static uint16_t u16at(const uint8_t *data) {
     return data[0] << 8 | data[1];
@@ -241,11 +241,27 @@ void ARTPConnection::setSource(ARTPSource* src)
 status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 {
 
-	static uint8_t sendbuf[UDP_MAX_SIZE];
+	static uint8_t sendbuf[UDP_MAX_SIZE+12];
 	uint32_t bytes; 
 	uint8_t* nalu_payload;
+	uint32_t timestamp_increse;
+	struct timeval tv;
+	static 	struct timeval tv_pre;
+//	static bool is1stPacket = true;
+//	if(is1stPacket)
+//		{
+//			gettimeofday(&tv_pre,NULL);
+//			is1stPacket = false;
+//		}
 	if(isFirstNalu(buf->data(),buf->size()))
-		timeStamp+=(unsigned int)(90000.0 / mRTPSource->mFramerate);
+		{
+			gettimeofday(&tv , NULL);
+			LOGI(LOG_TAG,"frame rate %f",(1000.0 / ((tv.tv_sec - tv_pre.tv_sec) * 1000.0 + (tv.tv_usec - tv_pre.tv_usec) / 1000.0)));
+			timestamp_increse = (uint32_t)(90000.0 / (1000.0 / ((tv.tv_sec - tv_pre.tv_sec) * 1000.0 + (tv.tv_usec - tv_pre.tv_usec) / 1000.0)));
+			memcpy(&tv_pre, &tv, sizeof(tv_pre));
+			timeStamp+=(unsigned int)(90000.0 / mRTPSource->mFramerate);//timestamp_increse;//
+		}
+	
 	NALU_t nalu;
 	RTP_FIXED_HEADER* rtp_hdr;
 	NALU_HEADER* nalu_hdr;
@@ -434,7 +450,7 @@ void* ARTPConnection::threadloop(void* arg)
 						}
 					buf->setRange(0,0);
 					connptr->mRTPSource->outputQPush(buf);
-					usleep(10000);
+					//usleep(10000);
 				}
 			//else LOGI(LOG_TAG,"RTP Source is empty");
 		}

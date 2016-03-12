@@ -53,6 +53,7 @@ ABuffer::~ABuffer() {
 }
 
 void ABuffer::setRange(size_t offset, size_t size) {
+	//LOGI(LOG_TAG,"offset %d,mCapacity %d,offset + size %d",offset,mCapacity,offset + size);
     CHECK_LE(offset, mCapacity);
     CHECK_LE(offset + size, mCapacity);
 
