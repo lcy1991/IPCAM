@@ -61,6 +61,9 @@ void ABuffer::setRange(size_t offset, size_t size) {
     mRangeLength = size;
 }
 
+void ABuffer::setTimeStamp(uint64_t ts){
+	mTimeStamp = ts;
+}
 void ABuffer::setFarewellMessage(AMessage* msg) {
     mFarewell = msg;
 }

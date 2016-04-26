@@ -179,7 +179,7 @@ int ARTPSource::outputQPush(const sp<ABuffer> &buf)
 ARTPSource::ARTPSource(uint32_t bufNum, uint32_t bufSize)
 	: mBufSize(bufSize),
 	  mBufNum(bufNum),
-	  mFramerate(9)
+	  mFramerate(29)
 {
 
 	mInputQueue = new MyQueue(bufNum,bufSize);

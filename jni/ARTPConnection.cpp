@@ -17,7 +17,6 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "IPCAM-RTP"
 
-
 #include "rtsp/ARTPConnection.h"
 
 #include "rtsp/ARTPSource.h"
@@ -32,7 +31,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
+#include <time.h>
 
 const uint8_t ff_ue_golomb_vlc_code[512]=
 { 32,32,32,32,32,32,32,32,31,32,32,32,32,32,32,32,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,
@@ -207,13 +206,15 @@ nal > MUT
 
 */
 
-bool ARTPConnection::isFirstNalu(uint8_t* data,size_t length) {
+bool ARTPConnection::isFirstNalu(uint8_t* data,size_t length,uint8_t* slice_type) {
 
 	uint8_t vlu;
 	uint32_t BUF[4];
 	uint32_t code;
+	uint32_t index;
+
 	if(length < 5)
-		{
+		{   
 			LOGE(LOG_TAG,"golomb decode error! buf length < 5");
 			return false;
 		}
@@ -223,11 +224,18 @@ bool ARTPConnection::isFirstNalu(uint8_t* data,size_t length) {
 	BUF[3] = data[4];
 	code = BUF[0]<<24 | BUF[1]<<16 | BUF[2]<<8 | BUF[3];
 	if(code >= (1<<27)){                    //该编码为9bit以内
-		code >>= 32 - 9;                    //将buf右移23bit得到比特串
-		vlu = ff_ue_golomb_vlc_code[code];
+		index = code >> (32 - 9);                    //将buf右移23bit得到比特串
+		vlu = ff_ue_golomb_vlc_code[index];
 	}
 	else LOGE(LOG_TAG,"golomb decode error!");
-	if(vlu == 0) return true;
+	if(vlu == 0) 
+		{
+			index = code << 1;//shift 1 bit to left ,cut the 1st coding used by first_mb_in_slice
+			index = index >> (32 - 9);   
+			*slice_type = ff_ue_golomb_vlc_code[index];
+			//LOGI(LOG_TAG,"slice_type %d, index %d",*slice_type,index);
+			return true;
+		}
 	else return false;
 
 }
@@ -242,25 +250,16 @@ status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 {
 
 	static uint8_t sendbuf[UDP_MAX_SIZE+12];
+	static float frame_rate = 15;
+	static uint64_t pre_ts = 0;
+	static uint32_t frame_cnt = 0;
+	
 	uint32_t bytes; 
 	uint8_t* nalu_payload;
+	uint8_t  slice_type;
 	uint32_t timestamp_increse;
-	struct timeval tv;
-	static 	struct timeval tv_pre;
-//	static bool is1stPacket = true;
-//	if(is1stPacket)
-//		{
-//			gettimeofday(&tv_pre,NULL);
-//			is1stPacket = false;
-//		}
-	if(isFirstNalu(buf->data(),buf->size()))
-		{
-			gettimeofday(&tv , NULL);
-			LOGI(LOG_TAG,"frame rate %f",(1000.0 / ((tv.tv_sec - tv_pre.tv_sec) * 1000.0 + (tv.tv_usec - tv_pre.tv_usec) / 1000.0)));
-			timestamp_increse = (uint32_t)(90000.0 / (1000.0 / ((tv.tv_sec - tv_pre.tv_sec) * 1000.0 + (tv.tv_usec - tv_pre.tv_usec) / 1000.0)));
-			memcpy(&tv_pre, &tv, sizeof(tv_pre));
-			timeStamp+=(unsigned int)(90000.0 / mRTPSource->mFramerate);//timestamp_increse;//
-		}
+	uint64_t cur_ts;
+	uint64_t delta_ts;
 	
 	NALU_t nalu;
 	RTP_FIXED_HEADER* rtp_hdr;
@@ -271,7 +270,32 @@ status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 	memset(&nalu,0,sizeof(NALU_t));
 	GetAnnexbNALU(&nalu,buf);//每执行一次，文件的指针指向本次找到的NALU的末尾，下一个位置即为下个NALU的起始码0x000001
 	dump(&nalu);//输出NALU长度和TYPE
-
+	frame_cnt++;
+	if(isFirstNalu(buf->data(),buf->size(),&slice_type))
+		{	
+			//LOGI(LOG_TAG,"liuchangyou New frame received, nal_unit_type:%d slice_type:%d\n",nalu.nal_unit_type,slice_type);	
+			if(slice_type == 2 || slice_type == 7)
+				{
+					do
+					{   
+						if(pre_ts == 0)
+							{
+								pre_ts = buf->getTimeStamp();
+							    continue;	
+							}
+						cur_ts = buf->getTimeStamp();
+						delta_ts = cur_ts - pre_ts; 	 //unit ms
+						frame_rate =  ((float)frame_cnt/(float)delta_ts)*1000;//unit FPS
+						LOGI(LOG_TAG,"liuchangyou cnt:%d  duration:%llums  rate:%f FPS",frame_cnt,delta_ts,frame_rate);
+						pre_ts = cur_ts;
+						frame_cnt = 0;//set frame count to 0		
+					}
+					while(0);
+								
+				}
+			timeStamp+=(unsigned int)(90000.0 / frame_rate);//timestamp_increse;//
+		}
+	
 	//memset(sendbuf,0,UDP_MAX_SIZE);//清空sendbuf；此时会将上次的时间戳清空，因此需要ts_current来保存上次的时间戳值
 //	LOGI(LOG_TAG,"RTP TimeStamp %d  seq %d",timeStamp,seqNum);
 	//rtp固定包头，为12字节,该句将sendbuf[0]的地址赋给rtp_hdr，以后对rtp_hdr的写入操作将直接写入sendbuf。
@@ -407,7 +431,7 @@ void ARTPConnection::sendRTPPacket(const uint8_t* buf ,size_t bytes)
 					it->mRTPSocket, buf, bytes, 0,
 					(const struct sockaddr *)&it->mRemoteRTPAddr, sizeof(it->mRemoteRTPAddr));	
 			//CHECK_EQ(n, (ssize_t)buffer->size());
-			if(n!=bytes)LOGE(LOG_TAG,"socket send rtp error %d!",n);
+			if(n!=bytes)LOGE(LOG_TAG,"socket send rtp error %ld!",n);
 	        ++it;
 	    }
 }
@@ -427,7 +451,9 @@ int ARTPConnection::GetAnnexbNALU (NALU_t *nalu,const sp<ABuffer> &buf)
 void ARTPConnection::dump(NALU_t *n)
 {
 	if (!n)return;
-	LOGI(LOG_TAG,"nal length:%d nal_unit_type: %x\n", n->len,n->nal_unit_type);
+	if(n->nal_unit_type == 7 || n->nal_unit_type == 8)
+		LOGI(LOG_TAG,"nal length:%d sps pps nal_unit_type: %d\n", n->len,n->nal_unit_type);
+
 }
 
 bool ARTPConnection::getStatus()

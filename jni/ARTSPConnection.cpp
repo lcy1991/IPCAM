@@ -377,7 +377,7 @@ bool ARTSPConnection::receiveRTSPRequest() {
     if (space2 < 0) {
         return false;
     }
-	LOGI(LOG_TAG,"SPACE1 %d SPACE2 %d",space1,space2);
+	//LOGI(LOG_TAG,"SPACE1 %d SPACE2 %d",space1,space2);
 
     AString Method(requestLine.c_str(), space1);
 	request->setString("Method",Method.c_str());

@@ -6,11 +6,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.List;
+import java.util.Timer;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.hardware.Camera.AutoFocusCallback;
+import android.hardware.Camera.PreviewCallback;
 import android.hardware.Camera.Size;
 import android.media.MediaRecorder;
 import android.net.LocalServerSocket;
@@ -63,8 +67,6 @@ public class IPCAM extends Activity implements OnClickListener {
 		sView = (SurfaceView) findViewById(R.id.dView);
 		// stop按钮不可用
 		stop.setEnabled(false);
-		
-		
 		// 设置Surface不需要维护自己的缓冲区
 		sView.getHolder().setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
 		// 设置分辨率
@@ -81,6 +83,7 @@ public class IPCAM extends Activity implements OnClickListener {
 	 
 		record.setOnClickListener(this);
 		stop.setOnClickListener(this);
+		
 		startRTSPServer();//---------------------------------client--------------------------------------------------jni//
 		IPaddress = getIPAddr();
 		try {
@@ -95,9 +98,10 @@ public class IPCAM extends Activity implements OnClickListener {
 			return;
 		}
 		thread_daemon();
+		
 
 	}
-	
+
 	@Override
 	 public boolean onCreateOptionsMenu(Menu menu) {
 	  // Inflate the menu; this adds items to the action bar if it is present.
@@ -126,7 +130,8 @@ public class IPCAM extends Activity implements OnClickListener {
 				    //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
 				    camera.setParameters(params);
 				    camera.setDisplayOrientation(90);
-				    camera.unlock();
+				    //camera.setOneShotPreviewCallback(this);/////////////////////////////////////////////////
+				    camera.unlock();	    
 				    mRecorder.setCamera(camera);
 				    // 创建保存录制视频的视频文件
 				    viodFile = new File(Environment.getExternalStorageDirectory()
@@ -154,12 +159,15 @@ public class IPCAM extends Activity implements OnClickListener {
 				    mRecorder.prepare();
 				    // 开始录制
 				    mRecorder.start();
+				    
 				    // 让record按钮不可用
 				    record.setEnabled(false);
 				    // 让stop按钮可用
 				    stop.setEnabled(true);
 				    isRecording = true;
-			
+			        //开启定时器任务计算帧率
+				    Timer timer = new Timer(); 
+				    timer.schedule(new calcFrameRateTask(), 100, 15);//monitor view change every 15ms
 				   } catch (Exception e) {
 				    e.printStackTrace();
 			    }
@@ -317,6 +325,7 @@ public class IPCAM extends Activity implements OnClickListener {
 		    camera.setParameters(params);
 		    camera.setDisplayOrientation(90);
 		    camera.unlock();
+		    //camera.startPreview();////////////////////////////////////////////////////////////////////////////////////
 		    mRecorder.setCamera(camera);
 
 		    // 设置从麦克风采集声音
@@ -366,5 +375,65 @@ public class IPCAM extends Activity implements OnClickListener {
 		    stop.setEnabled(false);
 		   }	
 	}
+
+	public Bitmap myShot(Activity activity) {
+		int[] pixels = new int[25];
+		// 获取windows中最顶层的view
+		View view = activity.getWindow().getDecorView();
+		view.buildDrawingCache();
+		// 获取状态栏高度
+		Rect rect = new Rect();
+		view.getWindowVisibleDisplayFrame(rect);
+		int statusBarHeights = rect.top;
+		Display display = activity.getWindowManager().getDefaultDisplay();
+		// 获取屏幕宽和高
+		int widths = display.getWidth();
+		int heights = display.getHeight();
+		// 允许当前窗口保存缓存信息
+		view.setDrawingCacheEnabled(true);
+		// 去掉状态栏
+		Bitmap bmp = Bitmap.createBitmap(view.getDrawingCache(), 0,statusBarHeights, widths, heights - statusBarHeights);
+		// 销毁缓存信息
+		view.destroyDrawingCache();
+		
+		bmp.getPixels(pixels, 0, widths, 0, 0, 5, 5);//获取25个像素点
+		return bmp;
+		}
 	
+	class calcFrameRateTask extends java.util.TimerTask{
+		View view;
+		int[] cur_pixels = new int[25];
+		int[] pre_pixels = new int[25];
+        public void run(){     
+            System.out.println("____TIMER_TASK____");   
+
+    		// 获取windows中最顶层的view
+    		view = IPCAM.this.getWindow().getDecorView();
+    		view.buildDrawingCache();
+    		// 获取状态栏高度
+    		Rect rect = new Rect();
+    		view.getWindowVisibleDisplayFrame(rect);
+    		int statusBarHeights = rect.top;
+    		Display display = IPCAM.this.getWindowManager().getDefaultDisplay();
+    		// 获取屏幕宽和高
+    		int widths = display.getWidth();
+    		int heights = display.getHeight();
+    		// 允许当前窗口保存缓存信息
+    		view.setDrawingCacheEnabled(true);
+    		// 去掉状态栏
+    		Bitmap bmp = Bitmap.createBitmap(view.getDrawingCache(), 0,
+    		//statusBarHeights, widths, heights - statusBarHeights);
+    		statusBarHeights, 5, 5);
+    		// 销毁缓存信息
+    		view.destroyDrawingCache();
+    		bmp.getPixels(cur_pixels, 0, 5, 0, 0, 5, 5);//获取25个像素点
+    		if(cur_pixels != pre_pixels)
+    			Log.i(TAG,"Frame changed");
+    		else Log.i(TAG,"Frame noooooooooooooooooooot changed");
+    		pre_pixels = cur_pixels;
+        }
+        protected void finalize(){
+        	
+        }
+    }    	
 }

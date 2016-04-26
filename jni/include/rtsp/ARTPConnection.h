@@ -214,7 +214,7 @@ static	void* threadloop(void* arg);
 //    status_t parseRTCP(StreamInfo *info, const sp<ABuffer> &buffer);
 //    status_t parseSR(StreamInfo *info, const uint8_t *data, size_t size);
 //    status_t parseBYE(StreamInfo *info, const uint8_t *data, size_t size);
-	bool isFirstNalu(uint8_t* data,size_t length);
+	bool isFirstNalu(uint8_t* data,size_t length,uint8_t* slice_type);
 	status_t RTPPacket(sp<ABuffer> buf);
 
     sp<ARTPSource> findSource(StreamInfo *info, uint32_t id);

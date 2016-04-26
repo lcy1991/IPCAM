@@ -34,7 +34,8 @@ struct ABuffer :public LightRefBase<ABuffer>{
     ABuffer(void *data, size_t capacity);
 
     void setFarewellMessage(AMessage* msg);
-
+	void setTimeStamp(uint64_t ts);
+	uint64_t getTimeStamp(){return mTimeStamp;}
     uint8_t *base() { return (uint8_t *)mData; }
     uint8_t *data() { return (uint8_t *)mData + mRangeOffset; }
     size_t capacity() const { return mCapacity; }
@@ -61,6 +62,8 @@ private:
     size_t mRangeLength;
 
     int32_t mInt32Data;
+
+	uint64_t mTimeStamp;
 
     bool mOwnsData;
 

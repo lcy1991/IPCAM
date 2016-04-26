@@ -641,7 +641,7 @@ void MyRTSPHandler::makeSDP(uint8_t* SPS,uint32_t SPS_len,uint8_t* PPS,uint32_t 
                 "a=tool:android media Server 2015\r\n"
 				"a=type:broadcast\r\n"
 				"a=control:*\r\n"
-				"a=framerate:9\r\n"
+			//	"a=framerate:9\r\n"
 				"a=range:npt=0-\r\n"
 				"a=x-qt-text-nam:H.264 Video, streamed by the android media Server\r\n"
 				"a=x-qt-text-inf:test.264\r\n"

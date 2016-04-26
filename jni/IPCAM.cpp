@@ -22,7 +22,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
-
+#include <time.h>
 #include "foundation/AString.h"
 #include "foundation/ALooper.h"
 #include "foundation/ADebug.h"
@@ -159,6 +159,7 @@ void* start(void*){
 	char Signal;
 	bool pre_status;
 	bool cur_status;
+	timespec cur_tv;
 	cur_status = pre_status = handler_rtp.getStatus();
 	while(1)
 	{
@@ -171,7 +172,7 @@ void* start(void*){
 					{
 						Signal=0x06;
 						send(localsocket,&Signal,1,0);
-						ret = recv(localsocket,Buf,52,MSG_WAITALL);//"52"
+						ret = recv(localsocket,Buf,52,MSG_WAITALL);//"52" it's different between devices!!!!!!!!!!!!!!!
 						if(ret < 0)
 							LOGE(LOG_TAG,"%s",strerror(errno));
 						else LOGI(LOG_TAG,"Receive 1st %d bytes",ret);
@@ -179,12 +180,16 @@ void* start(void*){
 							{
 								memcpy((char*)tmpbuf->data(),coolpad720x480spset,sizeof(coolpad720x480spset));
 								tmpbuf->setRange(0,sizeof(coolpad720x480spset));
+								clock_gettime(CLOCK_REALTIME, &cur_tv);	
+								tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms
 								mysource.inputQPush(tmpbuf);
 							}
 						if(mysource.inputQPop(tmpbuf)>=0)
 							{
 								memcpy((char*)tmpbuf->data(),coolpad720x480ppset,sizeof(coolpad720x480ppset));
 								tmpbuf->setRange(0,sizeof(coolpad720x480ppset));
+								clock_gettime(CLOCK_REALTIME, &cur_tv);	
+								tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms								
 								mysource.inputQPush(tmpbuf);
 							}
 
@@ -205,6 +210,8 @@ void* start(void*){
 								if(ret >= 0) 
 									{
 										tmpbuf->setRange(0,ret);
+										clock_gettime(CLOCK_REALTIME, &cur_tv);	
+										tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms										
 										LOGI(LOG_TAG,"get a NALU length:%d NUM:%d\n",ret,i++);
 									}
 								else tmpbuf->setRange(0,0);
