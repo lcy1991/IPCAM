@@ -33,7 +33,6 @@
 #include "stage_utils.h"
 #define LOG_TAG "IPCAM"
 
-
 #if 1
 
 
@@ -45,7 +44,7 @@
  */
 #define BUFLEN (1024*500)
 int getBoxLen(int localSocket);
-
+//./openRTSP.exe -u 123 123 rtsp://192.168.1.107:5544/ch0/live
 ARTPSource mysource(5,50000); 
 
 inline int recvN(int localSocket,char* buf,uint32_t N)
@@ -105,7 +104,7 @@ void* start(void*){
 	else
 		LOGE(LOG_TAG,"recv buffer length = %d",recv_size);
 	//设置新的缓冲区大小
-	recv_size = 500*1024;    /* 接收缓冲区大小为500K */
+	recv_size = 16*1024;    /* 接收缓冲区大小为500K */
 	optlen = sizeof(recv_size);
 	err = setsockopt(localsocket,SOL_SOCKET,SO_RCVBUF, (char *)&recv_size, optlen);
 	if(err<0)
@@ -179,7 +178,7 @@ void* start(void*){
 						if(mysource.inputQPop(tmpbuf)>=0)
 							{
 								memcpy((char*)tmpbuf->data(),coolpad720x480spset,sizeof(coolpad720x480spset));
-								tmpbuf->setRange(0,sizeof(coolpad720x480spset));
+								tmpbuf->setRange(RTP_HEADER_SIZE,sizeof(coolpad720x480spset));
 								clock_gettime(CLOCK_REALTIME, &cur_tv);	
 								tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms
 								mysource.inputQPush(tmpbuf);
@@ -187,7 +186,7 @@ void* start(void*){
 						if(mysource.inputQPop(tmpbuf)>=0)
 							{
 								memcpy((char*)tmpbuf->data(),coolpad720x480ppset,sizeof(coolpad720x480ppset));
-								tmpbuf->setRange(0,sizeof(coolpad720x480ppset));
+								tmpbuf->setRange(RTP_HEADER_SIZE,sizeof(coolpad720x480ppset));
 								clock_gettime(CLOCK_REALTIME, &cur_tv);	
 								tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms								
 								mysource.inputQPush(tmpbuf);
@@ -200,7 +199,7 @@ void* start(void*){
 						if(ret < 0)	
 							{
 								LOGE(LOG_TAG,"%s",strerror(errno));
-								tmpbuf->setRange(0,0);
+								tmpbuf->setRange(RTP_HEADER_SIZE,0);
 							}
 						else
 							{
@@ -209,12 +208,12 @@ void* start(void*){
 								ret = recvN(localsocket,(char*)tmpbuf->data(),Len);
 								if(ret >= 0) 
 									{
-										tmpbuf->setRange(0,ret);
+										tmpbuf->setRange(RTP_HEADER_SIZE,ret);
 										clock_gettime(CLOCK_REALTIME, &cur_tv);	
 										tmpbuf->setTimeStamp(cur_tv.tv_sec*1000 + cur_tv.tv_nsec/1000000);//ms										
 										LOGI(LOG_TAG,"get a NALU length:%d NUM:%d\n",ret,i++);
 									}
-								else tmpbuf->setRange(0,0);
+								else tmpbuf->setRange(RTP_HEADER_SIZE,0);
 							}
 						mysource.inputQPush(tmpbuf);
 					}				

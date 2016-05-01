@@ -23,6 +23,9 @@
 #include<list>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+/* when nalu length less than a rtp package length rtp header 12 bytes  +  nalu header 1 byte = 13bytes
+when a nalu is cut to many package so the header will be rtp header 12 bytes  + FU INDICATOR 1 byte + FU header 1 byte = 14 bytes*/
+#define RTP_HEADER_SIZE 13  
 
 using namespace std;
 

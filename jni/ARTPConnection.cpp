@@ -266,7 +266,7 @@ status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 	NALU_HEADER* nalu_hdr;
 	FU_INDICATOR* fu_ind;
 	FU_HEADER* fu_hdr;
-	
+	uint8_t* base;
 	memset(&nalu,0,sizeof(NALU_t));
 	GetAnnexbNALU(&nalu,buf);//每执行一次，文件的指针指向本次找到的NALU的末尾，下一个位置即为下个NALU的起始码0x000001
 	dump(&nalu);//输出NALU长度和TYPE
@@ -293,42 +293,43 @@ status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 					while(0);
 								
 				}
-			timeStamp+=(unsigned int)(90000.0 / frame_rate);//timestamp_increse;//
+			timeStamp+=(unsigned int)(90000.0 / frame_rate);
 		}
 	
 	//memset(sendbuf,0,UDP_MAX_SIZE);//清空sendbuf；此时会将上次的时间戳清空，因此需要ts_current来保存上次的时间戳值
 //	LOGI(LOG_TAG,"RTP TimeStamp %d  seq %d",timeStamp,seqNum);
-	//rtp固定包头，为12字节,该句将sendbuf[0]的地址赋给rtp_hdr，以后对rtp_hdr的写入操作将直接写入sendbuf。
-	rtp_hdr =(RTP_FIXED_HEADER*)&sendbuf[0]; 
-	
-	//设置RTP HEADER，
-	rtp_hdr->version = 2;	//版本号，此版本固定为2
-	rtp_hdr->marker  = 0;	//标志位，由具体协议规定其值。
-	rtp_hdr->payload = 96;//H264;//负载类型号，
-	rtp_hdr->ssrc	 = htonl(10);//随机指定为10，并且在本RTP会话中全局唯一
 
 	//当一个NALU小于1400字节的时候，采用一个单RTP包发送
 	if(nalu.len <= UDP_MAX_SIZE){
 		LOGI(LOG_TAG,"nalu length < UDP_MAX_SIZE");
+		//rtp固定包头，为12字节,该句将sendbuf[0]的地址赋给rtp_hdr，以后对rtp_hdr的写入操作将直接写入sendbuf。
+		base = buf->base()+ 1;            //
+		rtp_hdr =(RTP_FIXED_HEADER*)base;
+		//设置RTP HEADER
+		rtp_hdr->csrc_len = 0;
+		rtp_hdr->extension = 0;
+		rtp_hdr->padding = 0;
+		rtp_hdr->version = 2;	//版本号，此版本固定为2
+		rtp_hdr->payload = 96;//H264;//负载类型号，
+		rtp_hdr->ssrc	 = htonl(10);//随机指定为10，并且在本RTP会话中全局唯一	
 		//设置rtp M 位；
 		rtp_hdr->marker=1;
 		rtp_hdr->seq_no = htons(seqNum++); //序列号，每发送一个RTP包增1
-//		LOGI(LOG_TAG,"ts %d",seqNum);
+		//		LOGI(LOG_TAG,"ts %d",seqNum);
 		rtp_hdr->timestamp=htonl(timeStamp);
 		//设置NALU HEADER,并将这个HEADER填入sendbuf[12]
-		nalu_hdr =(NALU_HEADER*)&sendbuf[12]; //将sendbuf[12]的地址赋给nalu_hdr，之后对nalu_hdr的写入就将写入sendbuf中；
+		nalu_hdr =(NALU_HEADER*)&base[12]; //将base[12]的地址赋给nalu_hdr，之后对nalu_hdr的写入就将写入sendbuf中；
 		nalu_hdr->F=nalu.forbidden_bit;
 		nalu_hdr->NRI=nalu.nal_reference_idc>>5;//有效数据在n->nal_reference_idc的第6，7位，需要右移5位才能将其值赋给nalu_hdr->NRI。
 		nalu_hdr->TYPE=nalu.nal_unit_type;
 
-		nalu_payload=&sendbuf[13];//同理将sendbuf[13]赋给nalu_payload
-		memcpy(nalu_payload,nalu.buf+1,nalu.len-1);//去掉nalu头的nalu剩余内容写入sendbuf[13]开始的字符串。
-
+		//nalu_payload=&sendbuf[13];//同理将sendbuf[13]赋给nalu_payload
+		//memcpy(nalu_payload,nalu.buf+1,nalu.len-1);//去掉nalu头的nalu剩余内容写入sendbuf[13]开始的字符串。
 		//timeStamp = timeStamp + timestamp_increse;
 		
 		bytes = nalu.len + 12 ; //获得sendbuf的长度,为nalu的长度（包含NALU头但除去起始前缀）加上rtp_header的固定长度12字节
 		LOGI(LOG_TAG,"socket send RTP packet seqnum:%d timeStamp: %d",seqNum,timeStamp);
-		sendRTPPacket(sendbuf,bytes);//send(socket1,sendbuf,bytes,0);//发送RTP包
+		sendRTPPacket(base,bytes);//send(socket1,sendbuf,bytes,0);//发送RTP包
 
 	}else{
 		int packetNum = nalu.len/UDP_MAX_SIZE;
@@ -338,83 +339,104 @@ status_t ARTPConnection::RTPPacket(sp<ABuffer> buf)
 		int lastPackSize = nalu.len - (packetNum-1)*UDP_MAX_SIZE;
 		int packetIndex = 1 ;
 
+		//rtp固定包头，为12字节,该句将sendbuf[0]的地址赋给rtp_hdr，以后对rtp_hdr的写入操作将直接写入sendbuf。
+		base = buf->base();//header is 14 bytes,buf offset is 14 bytes 
+		rtp_hdr =(RTP_FIXED_HEADER*)base;
+		//设置RTP HEADER
+		rtp_hdr->csrc_len = 0;
+		rtp_hdr->extension = 0;
+		rtp_hdr->padding = 0;
+		rtp_hdr->version = 2;	                //版本号，此版本固定为2
+		rtp_hdr->marker  = 0;	                //标志位，由具体协议规定其值。
+		rtp_hdr->payload = 96;                  //H264;//负载类型号，
+		rtp_hdr->ssrc	 = htonl(10);           //随机指定为10，并且在本RTP会话中全局唯一
 		rtp_hdr->timestamp = htonl(timeStamp);
-
 		//发送第一个的FU，S=1，E=0，R=0
-		rtp_hdr->seq_no = htons(seqNum++); //序列号，每发送一个RTP包增1  
+		rtp_hdr->seq_no = htons(seqNum++);      //序列号，每发送一个RTP包增1  
 //		LOGI(LOG_TAG,"ts %d",seqNum);
-		//设置rtp M 位；
-		rtp_hdr->marker=0;
 		//设置FU INDICATOR,并将这个HEADER填入sendbuf[12]
-		fu_ind =(FU_INDICATOR*)&sendbuf[12]; //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
+		fu_ind =(FU_INDICATOR*)&base[12];       //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
 		fu_ind->F=nalu.forbidden_bit;
 		fu_ind->NRI=nalu.nal_reference_idc>>5;
 		fu_ind->TYPE=28;
 
 		//设置FU HEADER,并将这个HEADER填入sendbuf[13]
-		fu_hdr =(FU_HEADER*)&sendbuf[13];
+		fu_hdr =(FU_HEADER*)&base[13];
 		fu_hdr->S=1;
 		fu_hdr->E=0;
 		fu_hdr->R=0;
 		fu_hdr->TYPE=nalu.nal_unit_type;
 
-		nalu_payload=&sendbuf[14];//同理将sendbuf[14]赋给nalu_payload
-		memcpy(nalu_payload,nalu.buf+1,UDP_MAX_SIZE);//去掉NALU头
+		//nalu_payload=&sendbuf[14];//同理将sendbuf[14]赋给nalu_payload
+		//memcpy(nalu_payload,nalu.buf+1,UDP_MAX_SIZE);//去掉NALU头
 		bytes=UDP_MAX_SIZE+14;//获得sendbuf的长度,为nalu的长度（除去起始前缀和NALU头）加上rtp_header，fu_ind，fu_hdr的固定长度14字节
 		LOGI(LOG_TAG,"socket send RTP packet seqnum:%d timeStamp: %d",seqNum,timeStamp);
-		sendRTPPacket(sendbuf,bytes);//send( socket1, sendbuf, bytes, 0 );//发送RTP包
+		sendRTPPacket(base,bytes);//send( socket1, sendbuf, bytes, 0 );//发送RTP包
 
 		//发送中间的FU，S=0，E=0，R=0
 		for(packetIndex=2;packetIndex<packetNum;packetIndex++)
 		{
+			base = nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1 - 14;
+			rtp_hdr =(RTP_FIXED_HEADER*)base;
+			rtp_hdr->csrc_len = 0;
+			rtp_hdr->extension = 0;
+			rtp_hdr->padding = 0;
+			rtp_hdr->version = 2;	//版本号，此版本固定为2
+			rtp_hdr->marker  = 0;	//标志位，由具体协议规定其值。
+			rtp_hdr->payload = 96;//H264;//负载类型号，
+			rtp_hdr->ssrc	 = htonl(10);//随机指定为10，并且在本RTP会话中全局唯一
+			rtp_hdr->timestamp = htonl(timeStamp);			
 			rtp_hdr->seq_no = htons(seqNum++); //序列号，每发送一个RTP包增1
 //	 		LOGI(LOG_TAG,"ts %d",seqNum);
-			//设置rtp M 位；
-			rtp_hdr->marker=0;
 			//设置FU INDICATOR,并将这个HEADER填入sendbuf[12]
-			fu_ind =(FU_INDICATOR*)&sendbuf[12]; //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
+			fu_ind =(FU_INDICATOR*)&base[12]; //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
 			fu_ind->F=nalu.forbidden_bit;
 			fu_ind->NRI=nalu.nal_reference_idc>>5;
 			fu_ind->TYPE=28;
-
 			//设置FU HEADER,并将这个HEADER填入sendbuf[13]
-			fu_hdr =(FU_HEADER*)&sendbuf[13];
+			fu_hdr =(FU_HEADER*)&base[13];
 			fu_hdr->S=0;
 			fu_hdr->E=0;
 			fu_hdr->R=0;
 			fu_hdr->TYPE=nalu.nal_unit_type;
-
-			nalu_payload=&sendbuf[14];//同理将sendbuf[14]的地址赋给nalu_payload
-			memcpy(nalu_payload,nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1,UDP_MAX_SIZE);//去掉起始前缀的nalu剩余内容写入sendbuf[14]开始的字符串。
+			//nalu_payload=&sendbuf[14];//同理将sendbuf[14]的地址赋给nalu_payload
+			//memcpy(nalu_payload,nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1,UDP_MAX_SIZE);//去掉起始前缀的nalu剩余内容写入sendbuf[14]开始的字符串。
 			bytes=UDP_MAX_SIZE+14;//获得sendbuf的长度,为nalu的长度（除去原NALU头）加上rtp_header，fu_ind，fu_hdr的固定长度14字节
 			LOGI(LOG_TAG,"socket send RTP packet seqnum:%d timeStamp: %d",seqNum,timeStamp);
-			sendRTPPacket(sendbuf,bytes);//send( socket1, sendbuf, bytes, 0 );//发送rtp包				
+			sendRTPPacket(base,bytes);//send( socket1, sendbuf, bytes, 0 );//发送rtp包				
 		}
 
 		//发送最后一个的FU，S=0，E=1，R=0
-	
-		rtp_hdr->seq_no = htons(seqNum ++);
-		LOGI(LOG_TAG,"ts %d",seqNum);
+		base = nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1 - 14;
+		rtp_hdr =(RTP_FIXED_HEADER*)base;
+		rtp_hdr->csrc_len = 0;
+		rtp_hdr->extension = 0;
+		rtp_hdr->padding = 0;		
+		rtp_hdr->version = 2;	//版本号，此版本固定为2
+		rtp_hdr->payload = 96;//H264;//负载类型号，
+		rtp_hdr->ssrc	 = htonl(10);//随机指定为10，并且在本RTP会话中全局唯一
+		rtp_hdr->timestamp = htonl(timeStamp);			
+		rtp_hdr->seq_no = htons(seqNum++); //序列号，每发送一个RTP包增1
 		//设置rtp M 位；当前传输的是最后一个分片时该位置1		
 		rtp_hdr->marker=1;
+		LOGI(LOG_TAG,"ts %d",seqNum);		
 		//设置FU INDICATOR,并将这个HEADER填入sendbuf[12]
-		fu_ind =(FU_INDICATOR*)&sendbuf[12]; //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
+		fu_ind =(FU_INDICATOR*)&base[12]; //将sendbuf[12]的地址赋给fu_ind，之后对fu_ind的写入就将写入sendbuf中；
 		fu_ind->F=nalu.forbidden_bit;
 		fu_ind->NRI=nalu.nal_reference_idc>>5;
 		fu_ind->TYPE=28;
-
 		//设置FU HEADER,并将这个HEADER填入sendbuf[13]
-		fu_hdr =(FU_HEADER*)&sendbuf[13];
+		fu_hdr =(FU_HEADER*)&base[13];
 		fu_hdr->S=0;
 		fu_hdr->E=1;
 		fu_hdr->R=0;
 		fu_hdr->TYPE=nalu.nal_unit_type;
 
-		nalu_payload=&sendbuf[14];//同理将sendbuf[14]的地址赋给nalu_payload
-		memcpy(nalu_payload,nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1,lastPackSize-1);//将nalu最后剩余的-1(去掉了一个字节的NALU头)字节内容写入sendbuf[14]开始的字符串。
+		//nalu_payload=&sendbuf[14];//同理将sendbuf[14]的地址赋给nalu_payload
+		//memcpy(nalu_payload,nalu.buf+(packetIndex-1)*UDP_MAX_SIZE+1,lastPackSize-1);//将nalu最后剩余的-1(去掉了一个字节的NALU头)字节内容写入sendbuf[14]开始的字符串。
 		bytes=lastPackSize-1+14;//获得sendbuf的长度,为剩余nalu的长度l-1加上rtp_header，FU_INDICATOR,FU_HEADER三个包头共14字节
 		LOGI(LOG_TAG,"socket send RTP packet seqnum:%d timeStamp: %d",seqNum,timeStamp);
-		sendRTPPacket(sendbuf,bytes);//send( socket1, sendbuf, bytes, 0 );//发送rtp包		
+		sendRTPPacket(base,bytes);//send( socket1, sendbuf, bytes, 0 );//发送rtp包		
 	}
 	return 0;
 
@@ -474,7 +496,7 @@ void* ARTPConnection::threadloop(void* arg)
 						{
 						
 						}
-					buf->setRange(0,0);
+					buf->setRange(RTP_HEADER_SIZE,0);
 					connptr->mRTPSource->outputQPush(buf);
 					//usleep(10000);
 				}
