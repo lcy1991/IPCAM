@@ -104,7 +104,7 @@ void* start(void*){
 	else
 		LOGE(LOG_TAG,"recv buffer length = %d",recv_size);
 	//设置新的缓冲区大小
-	recv_size = 16*1024;    /* 接收缓冲区大小为500K */
+	recv_size = 8*1024;    /* 接收缓冲区大小为500K */
 	optlen = sizeof(recv_size);
 	err = setsockopt(localsocket,SOL_SOCKET,SO_RCVBUF, (char *)&recv_size, optlen);
 	if(err<0)
