@@ -500,7 +500,7 @@ void* ARTPConnection::threadloop(void* arg)
 					connptr->mRTPSource->outputQPush(buf);
 					//usleep(10000);
 				}
-			//else LOGI(LOG_TAG,"RTP Source is empty");
+			else LOGI(LOG_TAG,"RTP Source is empty");
 		}
 }
 

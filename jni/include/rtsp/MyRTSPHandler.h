@@ -51,7 +51,7 @@ virtual void onMessageReceived(const sp<AMessage> &msg);
 
 	void onCloseSession(const sp<AMessage> &msg);
 	
-	void getDigest(const char* NONCE,const char* public_method,AString *result);
+	void getDigest(const char* NONCE,const char* public_method,const char* _uri,AString *result);
 
 	int mSocket;
 	int mSocketAccept;

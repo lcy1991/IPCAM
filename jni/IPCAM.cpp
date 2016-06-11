@@ -31,7 +31,7 @@
 #include "rtsp/ARTPConnection.h"
 #include "com_liuuu_ipcamera_IPCAM.h"
 #include "stage_utils.h"
-#define LOG_TAG "IPCAM"
+#define LOG_TAG "IPCAM_IPCAM_CPP"
 
 #if 1
 
@@ -103,6 +103,7 @@ void* start(void*){
 		LOGE(LOG_TAG,"get recv buffer length error\n");
 	else
 		LOGE(LOG_TAG,"recv buffer length = %d",recv_size);
+#if 0
 	//设置新的缓冲区大小
 	recv_size = 8*1024;    /* 接收缓冲区大小为500K */
 	optlen = sizeof(recv_size);
@@ -116,7 +117,7 @@ void* start(void*){
 		LOGE(LOG_TAG,"get NEW recv buffer length error\n");
 	else
 		LOGE(LOG_TAG,"NEW recv buffer length = %d",recv_size);
-
+#endif
 	MakeSocketBlocking(localsocket,false);
 	//连接服务器
 	while(connect(localsocket, (struct sockaddr *)&remote, len))
@@ -216,7 +217,9 @@ void* start(void*){
 								else tmpbuf->setRange(RTP_HEADER_SIZE,0);
 							}
 						mysource.inputQPush(tmpbuf);
-					}				
+					}		
+				else
+					LOGI(LOG_TAG,"get buffer fail.............");
 			}
 		else
 			{

@@ -487,7 +487,7 @@ void* MyRTSPHandler::NewSession(void* arg)
 }
 
 // response= md5(md5(username:realm:password):nonce:md5(public_method:url));
-void MyRTSPHandler::getDigest(const char* NONCE,const char* public_method,AString *result)
+void MyRTSPHandler::getDigest(const char* NONCE,const char* public_method,const char* _uri,AString *result)
 {
 	AString tmpStr;
 	AString part3;
@@ -501,7 +501,7 @@ void MyRTSPHandler::getDigest(const char* NONCE,const char* public_method,AStrin
 	tmpStr.append(":");
 	part3.append(public_method);
 	part3.append(":");
-	part3.append(mURI);
+	part3.append(_uri);//20160611 for apple quick time auth fail
 	MD5_encode(part3.c_str(),part3_md5);
 	//LOGI(LOG_TAG,"part3_md5:%s",part3_md5);
 	
@@ -583,16 +583,21 @@ int MyRTSPHandler::getHostIP(char addressBuffer[40])
 }
 #endif
 
-
+//Authorization: Digest username="123", realm="android", nonce="c6310c4823c748f1bda5abe98bc8d390", uri="rtsp://192.168.1.107:5544/ch0/live", response="759cc15cc5aeaf211ce18d32bf7bba7d"
 bool MyRTSPHandler::isAuthenticate(const char* NONCE,AString& tmpStr,const char* method)
 {
 	AString Digest;
 	ssize_t resp;
+	ssize_t uri_start;
+	ssize_t uri_end;
 	resp = tmpStr.find("response");
-	
+	if(resp < 0) return false;
+	uri_start = tmpStr.find("uri") + 5;
+	uri_end = tmpStr.find("\", ",uri_start);
 	AString response(tmpStr, resp + 10, 32);
-	LOGI(LOG_TAG,"~~~Client's response %s",response.c_str());
-	getDigest(NONCE,method,&Digest);
+	AString uri(tmpStr, uri_start, uri_end - uri_start);
+	LOGI(LOG_TAG,"~~~Client's response %s,uri %s",response.c_str(),uri.c_str());
+	getDigest(NONCE,method,uri.c_str(),&Digest);
 	if(Digest==response)
 		{
 			LOGI(LOG_TAG,"Authenticate passed !!!!");
